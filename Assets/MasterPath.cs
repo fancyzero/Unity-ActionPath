@@ -12,6 +12,7 @@ public class MasterPath :MonoBehaviour{
         local,
         world,
     }
+    public bool looped = true;
     public bool worldSpace = false;
     public float simplifyTorrence = 0.999f;
     static int sectionSamples = 100;
@@ -97,6 +98,7 @@ public class MasterPath :MonoBehaviour{
     public void ClearControlPoints()
     {
         controlPoints.Clear();
+        CacheSections();
     }
 
     public void ClearEventPoints()
@@ -203,13 +205,16 @@ public class MasterPath :MonoBehaviour{
         float oldLength = CachedPathLength();
         cachedSections = new List<MasterPath.CachedSection>();
         float baseLength = 0;
-        for (int i = 0; i < controlPoints.Count - 1; i++)
-        {
-            var points = SampleSection(baseLength, i, i + 1);
+        int lastPointIndex = looped? controlPoints.Count:controlPoints.Count - 1;
 
-            MasterPath.CachedSection sec = new MasterPath.CachedSection
+
+        for (int i = 0; i < lastPointIndex; i++)
+        {
+            var sampledPoints = SampleSection(baseLength, i, (i+1) % controlPoints.Count);
+
+            CachedSection sec = new CachedSection
             {
-                points = points
+                points = sampledPoints
             };
             cachedSections.Add(sec);
             baseLength = sec.EndingLength();

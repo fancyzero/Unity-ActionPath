@@ -1,5 +1,4 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
@@ -10,79 +9,71 @@ public class PathEditor : Editor
     static bool editingCurve = false;
     static bool editingEvent = false;
     static bool showEventLabel = false;
-
     static float handleSize = 0.05f;
     static float mouseCursorCaptureRange = 0.1f;
 
     static protected Vector2 CompressVector(Vector2 v)
     {
-        return v.normalized * v.magnitude * 1.0f / VectorCompressPower;// Mathf.Pow((v.magnitude), 1.0f / VectorCompressPower);
+        return v.normalized * v.magnitude * 1.0f / VectorCompressPower;
     }
 
     static protected Vector2 DecompressVector(Vector2 v)
     {
-        return v.normalized * v.magnitude * VectorCompressPower; // (Mathf.Pow(v.magnitude, VectorCompressPower));
+        return v.normalized * v.magnitude * VectorCompressPower;
     }
 
     class HandleRecord
     {
         public int controlPointIndex;
     }
+
     protected virtual void OnSceneGUI()
     {
-
         var src = target as MasterPath;
         Vector3 mousePosition = Event.current.mousePosition;
         Ray ray = HandleUtility.GUIPointToWorldRay(mousePosition);
         var mouseWorldPosition = ray.origin;
-
         var mouseLocalPosition = mouseWorldPosition;
         if (!src.worldSpace)
             mouseLocalPosition = src.WorldToLocal(mouseWorldPosition);
 
-
-
         if (editingEvent)
         {
-            //if (Event.current.type == EventType.ContextClick)
+            if (Event.current.type == EventType.MouseUp && Event.current.button == 1)
             {
-                if (Event.current.type == EventType.MouseUp && Event.current.button == 1)
+                GenericMenu menu = new GenericMenu();
+
+                var ret = src.ProjectPointToPath(src.WorldToLocal(mouseWorldPosition));
+                if (((Vector2)ret.projectedPos - (Vector2)mouseLocalPosition).magnitude < HandleUtility.GetHandleSize(mouseWorldPosition) * mouseCursorCaptureRange)
                 {
-                    GenericMenu menu = new GenericMenu();
+                    Event.current.Use();
+                    menu.AddItem(new GUIContent("add Event "), false, t => src.AddEvent((float)t, src.gameObject, typeof(FiringEvent)), ret.length);
 
-                    var ret = src.ProjectPointToPath(src.WorldToLocal(mouseWorldPosition));
-                    if (((Vector2)ret.projectedPos - (Vector2)mouseLocalPosition).magnitude < HandleUtility.GetHandleSize(mouseWorldPosition) * mouseCursorCaptureRange)
-                    {
-                        Event.current.Use();
-                        menu.AddItem(new GUIContent("add Event "), false, t => src.AddEvent((float)t, src.gameObject, typeof(FiringEvent)), ret.length);
-
-                        menu.ShowAsContext();
-                    }
+                    menu.ShowAsContext();
                 }
-                foreach (var evt in src.eventPoints)
-                {
+            }
 
-                    EditorGUI.BeginChangeCheck();
-                    int ctrlID = GUIUtility.GetControlID(FocusType.Passive);
-                    var pos = Handles.FreeMoveHandle(ctrlID, src.LocalToWorld(evt.cachedPosition), Quaternion.identity,
-                        HandleUtility.GetHandleSize(evt.cachedPosition) * handleSize * 1.5f, Vector3.zero, Handles.SphereHandleCap);
-                    pos = src.WorldToLocal(pos);
-                    MasterPath.PathProjectionResult projRet = new MasterPath.PathProjectionResult();
-                    if ((pos - evt.cachedPosition).magnitude > 0.0001f)
-                    {
-                        projRet = src.ProjectPointToPath(pos);
-                    }
-                    //handleRecords[ctrlID] = new HandleRecord { controlPointIndex = i };
-                    var distanceToMouse = ((Vector2)mouseWorldPosition - (Vector2)evt.cachedPosition).magnitude;
-                    if (distanceToMouse < 0.02f)
-                        HandleUtility.AddControl(ctrlID, distanceToMouse);
-                    if (EditorGUI.EndChangeCheck())
-                    {
-                        Undo.RecordObject(target, "set event point");
-                        evt.cachedPosition = projRet.projectedPos;
-                        evt.positionOnPath = projRet.length;
-                        //src.CacheSections();
-                    }
+            foreach (var evt in src.eventPoints)
+            {
+                EditorGUI.BeginChangeCheck();
+                int ctrlID = GUIUtility.GetControlID(FocusType.Passive);
+                var pos = Handles.FreeMoveHandle(ctrlID, src.LocalToWorld(evt.cachedPosition), Quaternion.identity,
+                    HandleUtility.GetHandleSize(evt.cachedPosition) * handleSize * 1.5f, Vector3.zero, Handles.SphereHandleCap);
+                pos = src.WorldToLocal(pos);
+                MasterPath.PathProjectionResult projRet = new MasterPath.PathProjectionResult();
+                if ((pos - evt.cachedPosition).magnitude > 0.0001f)
+                {
+                    projRet = src.ProjectPointToPath(pos);
+                }
+                var distanceToMouse = ((Vector2)mouseWorldPosition - (Vector2)evt.cachedPosition).magnitude;
+                if (distanceToMouse < 0.02f)
+                    HandleUtility.AddControl(ctrlID, distanceToMouse);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(target, "set event point");
+                    evt.cachedPosition = projRet.projectedPos;
+                    evt.positionOnPath = projRet.length;
+                    //src.CacheSections();
                 }
             }
         }
@@ -98,7 +89,6 @@ public class PathEditor : Editor
                 int ctrlID = GUIUtility.GetControlID(FocusType.Passive);
                 var newPos = Handles.FreeMoveHandle(ctrlID, wcp.pos, Quaternion.identity,
                     HandleUtility.GetHandleSize(wcp.pos) * handleSize * 1.5f, Vector3.zero, Handles.RectangleHandleCap);
-                //newPos = src.WorldToLocal(newPos);
                 handleRecords[ctrlID] = new HandleRecord { controlPointIndex = i };
                 var distanceToMouse = ((Vector2)mouseWorldPosition - (Vector2)newPos).magnitude;
                 if (distanceToMouse < 0.02f)
@@ -106,34 +96,35 @@ public class PathEditor : Editor
                 if (EditorGUI.EndChangeCheck())
                 {
                     Undo.RecordObject(target, "set control point");
-                    src.SetControlPointPosition(i, newPos ,MasterPath.SampleSpace.world);
+                    src.SetControlPointPosition(i, newPos, MasterPath.SampleSpace.world);
                     src.CacheSections();
                 }
                 EditorGUI.BeginChangeCheck();
-                if (i > 0)
+                if (i > 0 || src.looped)
                 {
                     var intan = Handles.FreeMoveHandle(GUIUtility.GetControlID(FocusType.Passive),
-                        wcp.pos+ CompressVector((wcp.inTangent- wcp.pos) * -1), Quaternion.identity,
+                        wcp.pos + CompressVector((wcp.inTangent - wcp.pos) * -1), Quaternion.identity,
                         HandleUtility.GetHandleSize(wcp.pos + CompressVector((wcp.inTangent - wcp.pos) * -1)) * handleSize,
                         Vector3.zero, Handles.RectangleHandleCap);
                     if (EditorGUI.EndChangeCheck())
                     {
                         Undo.RecordObject(target, "set intangent");
-                        src.SetControlPointInTangent(i, DecompressVector(intan - (Vector3)(wcp.pos)) * -1+wcp.pos,MasterPath.SampleSpace.world);
+                        src.SetControlPointInTangent(i, DecompressVector(intan - (Vector3)(wcp.pos)) * -1 + wcp.pos, MasterPath.SampleSpace.world);
                         src.CacheSections();
                     }
                 }
-                if (i < src.GetControlPointsCount() - 1)
+
+                if (i < src.GetControlPointsCount() - 1 || src.looped)
                 {
                     EditorGUI.BeginChangeCheck();
                     var outtan = Handles.FreeMoveHandle(GUIUtility.GetControlID(FocusType.Passive),
-                        wcp.pos + CompressVector(wcp.outTangent-wcp.pos), Quaternion.identity,
+                        wcp.pos + CompressVector(wcp.outTangent - wcp.pos), Quaternion.identity,
                         HandleUtility.GetHandleSize(wcp.pos + CompressVector(wcp.outTangent - wcp.pos)) * handleSize,
                         Vector3.zero, Handles.RectangleHandleCap);
                     if (EditorGUI.EndChangeCheck())
                     {
                         Undo.RecordObject(target, "set out tangent");
-                        src.SetControlPointOutTangent(i,DecompressVector(outtan - (Vector3)(wcp.pos)) + wcp.pos, MasterPath.SampleSpace.world);
+                        src.SetControlPointOutTangent(i, DecompressVector(outtan - (Vector3)(wcp.pos)) + wcp.pos, MasterPath.SampleSpace.world);
                         src.CacheSections();
                     }
                 }
@@ -162,16 +153,20 @@ public class PathEditor : Editor
                 {
                     Event.current.Use();
                     Undo.RecordObject(target, "add control point");
+                    bool pointAdded = false;
                     if (src.GetControlPointsCount() >= 2)
                     {
                         var projRet = src.ProjectPointToPath(mouseLocalPosition);
                         //must compare in world space
-                        if (((Vector2)(src.LocalToWorld(projRet.projectedPos) - mouseWorldPosition)).magnitude < HandleUtility.GetHandleSize(mouseWorldPosition)*mouseCursorCaptureRange)
+                        if (((Vector2)(src.LocalToWorld(projRet.projectedPos) - mouseWorldPosition)).magnitude < HandleUtility.GetHandleSize(mouseWorldPosition) * mouseCursorCaptureRange)
+                        {
                             src.AddControlPoint(projRet.projectedPos, projRet.secIndex, MasterPath.SampleSpace.local);
+                            pointAdded = true;
+                        }
                     }
-                    else
+                    if (!pointAdded)
                     {
-                        src.AddControlPoint(mouseLocalPosition, 0, MasterPath.SampleSpace.local);
+                        src.AddControlPoint(mouseLocalPosition, src.cachedSections.Count, MasterPath.SampleSpace.local);
                     }
                 }
             }
@@ -188,43 +183,37 @@ public class PathEditor : Editor
             Vector3 mousePosition = Event.current.mousePosition;
             Ray ray = HandleUtility.GUIPointToWorldRay(mousePosition);
             var mouseWorldPosition = ray.origin;
-
-            for (int i = 0; i < src.GetControlPointsCount(); i++)
+            int secIndex = 0;
+            foreach (var sec in src.cachedSections)
             {
                 Handles.color = Color.white;
-                //Gizmos.DrawWireSphere(src.wayPoints[i].pos, 0.1f);
-                if (i < src.GetControlPointsCount() - 1)
+                List<Vector3> points = new List<Vector3>();
+                foreach (var p in sec.points)
                 {
-                    List<Vector3> points = new List<Vector3>();
-                    float t = 0;
-                    while (t <= 1)
-                    {
-                        points.Add(src.SamplePoint(i, i + 1, t, MasterPath.SampleSpace.world));
-                        t += 0.01f;
-                    }
+                    points.Add(src.LocalToWorld(p.pos));
                     Handles.DrawAAPolyLine(points.ToArray());
-                    //Gizmos.DrawLine(src.wayPoints[i].pos, src.wayPoints[i + 1].pos);
                 }
                 if (editingCurve)
                 {
                     Handles.color = Color.red;
-                    var wcp = src.GetControlPoint(i, MasterPath.SampleSpace.world);
-                    var lcp = src.GetControlPoint(i, MasterPath.SampleSpace.local);
-                    if (i > 0)
+                    var wcp = src.GetControlPoint(secIndex, MasterPath.SampleSpace.world);
+                    if (secIndex > 0 || src.looped)
                         Handles.DrawAAPolyLine(wcp.pos,
-                            wcp.pos + CompressVector((wcp.inTangent-wcp.pos) * -1));
+                            wcp.pos + CompressVector((wcp.inTangent - wcp.pos) * -1));
                     Handles.color = Color.green;
-                    if (i < src.GetControlPointsCount() - 1)
+                    if (secIndex < src.GetControlPointsCount() - 1 || src.looped)
                         Handles.DrawAAPolyLine(wcp.pos,
-                            wcp.pos + CompressVector(wcp.outTangent-wcp.pos));
+                            wcp.pos + CompressVector(wcp.outTangent - wcp.pos));
                 }
+                secIndex++;
+
             }
         }
     }
 
     static void SetEventType(ChangeEventType param)
     {
-        GameObject.DestroyImmediate(param.path.eventPoints[param.pointIndex].events[param.eventIndex]);
+        DestroyImmediate(param.path.eventPoints[param.pointIndex].events[param.eventIndex]);
         param.path.eventPoints[param.pointIndex].events[param.eventIndex] = param.gameObject.AddComponent(param.type) as EventBase;
 
     }
@@ -241,24 +230,29 @@ public class PathEditor : Editor
 
     public override void OnInspectorGUI()
     {
+        bool needRecache = false;
         MasterPath owner = serializedObject.targetObject as MasterPath;
-
+        EditorGUI.BeginChangeCheck();
         EditorGUILayout.PropertyField(serializedObject.FindProperty("worldSpace"));
-        if( GUI.changed)
-            EditorUtility.SetDirty(owner);
-        
+        EditorGUILayout.PropertyField(serializedObject.FindProperty("looped"));
+        if (EditorGUI.EndChangeCheck())
+        {
+            needRecache = true;
+        }
+
+
         var propControlPoints = serializedObject.FindProperty("controlPoints");
-        
+
         if (propControlPoints != null)
         {
             EditorGUI.indentLevel += 1;
             EditorGUILayout.BeginHorizontal();
             propControlPoints.isExpanded = EditorGUILayout.Foldout(propControlPoints.isExpanded, "control points");
-            if (propControlPoints.arraySize == 0)
-                if (GUILayout.Button("+", GUILayout.MaxWidth(30)))
-                {
-                    propControlPoints.InsertArrayElementAtIndex(0);
-                }
+            //if (propControlPoints.arraySize == 0)
+            //    if (GUILayout.Button("+", GUILayout.MaxWidth(30)))
+            //    {
+            //        propControlPoints.InsertArrayElementAtIndex(0);
+            //    }
             if (GUILayout.Button("[]", GUILayout.MaxWidth(30)))
             {
                 Undo.RecordObject(serializedObject.targetObject, "remove all control points");
@@ -294,11 +288,11 @@ public class PathEditor : Editor
             EditorGUI.indentLevel += 1;
             EditorGUILayout.BeginHorizontal();
             proEventPoints.isExpanded = EditorGUILayout.Foldout(proEventPoints.isExpanded, "event points");
-            if (proEventPoints.arraySize == 0)
-                if (GUILayout.Button("+", GUILayout.MaxWidth(30)))
-                {
-                    proEventPoints.InsertArrayElementAtIndex(0);
-                }
+            //if (proEventPoints.arraySize == 0)
+            //    if (GUILayout.Button("+", GUILayout.MaxWidth(30)))
+            //    {
+            //        proEventPoints.InsertArrayElementAtIndex(0);
+            //    }
             if (GUILayout.Button("[]", GUILayout.MaxWidth(30)))
             {
                 Undo.RecordObject(serializedObject.targetObject, "remove all events");
@@ -317,11 +311,13 @@ public class PathEditor : Editor
                     if (p.isExpanded)
                     {
 
-                        if (p.FindPropertyRelative("events").arraySize == 0)
-                            if (GUILayout.Button("+", GUILayout.MaxWidth(30)))
-                            {
-                                p.FindPropertyRelative("events").InsertArrayElementAtIndex(0);
-                            }
+                        //if (p.FindPropertyRelative("events").arraySize == 0)
+                        //{
+                        //    if (GUILayout.Button("+", GUILayout.MaxWidth(30)))
+                        //    {
+                        //        p.FindPropertyRelative("events").InsertArrayElementAtIndex(0);
+                        //    }
+                        //}
                         EditorGUILayout.LabelField("events");
                         EditorGUILayout.PropertyField(p.FindPropertyRelative("positionOnPath"));
                         EditorGUI.indentLevel += 1;
@@ -352,10 +348,6 @@ public class PathEditor : Editor
                                 EditorGUILayout.PrefixLabel("fireDuration");
                                 fireEvent.firingDuration = EditorGUILayout.FloatField(fireEvent.firingDuration, GUILayout.MinHeight(10));
                                 EditorGUILayout.EndHorizontal();
-                            }
-                            else
-                            {
-
                             }
 
                             eventIndex++;
@@ -390,7 +382,14 @@ public class PathEditor : Editor
         showEventLabel = GUILayout.Toggle(showEventLabel, "Event Label", "Button", GUILayout.MaxWidth(100));
         if (b != showEventLabel)
             SceneView.RepaintAll();
+        EditorGUILayout.Popup(0, new[] { "aa", "bb", "cc" });
         serializedObject.ApplyModifiedProperties();
+        if (needRecache)
+        {
+            owner.CacheSections();
+            SceneView.RepaintAll();
+
+        }
     }
-    
+
 }
